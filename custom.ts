@@ -1,3 +1,7 @@
+/** micro:bit extension to integrate the AS7341 spectral detector in MakeCode projects
+ *  the library is a partial port of https://github.com/adafruit/Adafruit_AS7341
+ *  not all functions are still implemented
+ */
 
 // register definitions
 const AS7341_I2CADDR_DEFAULT    = 0x39 // AS7341 default i2c address
@@ -117,55 +121,14 @@ enum AS7341_SPECTRAL_CH {
     AS7341_CHANNEL_NIR,
 };
 
-// /**
-//  * @brief The number of measurement cycles with spectral data outside of a
-//  * threshold required to trigger an interrupt
-//  *
-//  */
-// typedef enum {
-//     AS7341_INT_COUNT_ALL, // 0
-//     AS7341_INT_COUNT_1,   // 1
-//     AS7341_INT_COUNT_2,   // 2
-//     AS7341_INT_COUNT_3,   // 3
-//     AS7341_INT_COUNT_5,   // 4
-//     AS7341_INT_COUNT_10,  // 5
-//     AS7341_INT_COUNT_15,  // 6
-//     AS7341_INT_COUNT_20,  // 7
-//     AS7341_INT_COUNT_25,  // 8
-//     AS7341_INT_COUNT_30,  // 9
-//     AS7341_INT_COUNT_35,  // 10
-//     AS7341_INT_COUNT_40,  // 11
-//     AS7341_INT_COUNT_45,  // 12
-//     AS7341_INT_COUNT_50,  // 13
-//     AS7341_INT_COUNT_55,  // 14
-//     AS7341_INT_COUNT_60,  // 15
-// } as7341_int_cycle_count_t;
-
-// /**
-//  * @brief Pin directions to set how the GPIO pin is to be used
-//  *
-//  */
-// typedef enum {
-//     AS7341_GPIO_OUTPUT, // THhe GPIO pin is configured as an open drain output
-//     AS7341_GPIO_INPUT,  // The GPIO Pin is set as a high-impedence input
-// } as7341_gpio_dir_t;
-
-// /**
-//  * @brief Wait states for async reading
-//  */
-// typedef enum {
-//     AS7341_WAITING_START, //
-//     AS7341_WAITING_LOW,   //
-//     AS7341_WAITING_HIGH,  //
-//     AS7341_WAITING_DONE,  //
-// } as7341_waiting_t;
-
-
+// enum INT_COUNT not ported
+// enum GPIO not ported
+// enum Asynch not ported
 
 /**
  * Custom blocks
  */
-//% weight=100 color=#0fbc11 icon=""
+//% weight=100 color=#0fbc11 icon="\u263c"
 namespace AS7341 {
 
     /**
@@ -175,18 +138,45 @@ namespace AS7341 {
     export class AS7341 {
         // properties
         i2c: number;
+        
+        // private properties (previous spectral reads)
+        //violet: number; //415/26nm
+        // private _indigo: number; //445/30nm
+        // private _blue:   number; //480/36nm
+        // private _cyan:   number; //515/39nm
+        // private _green:  number; //555/39nm
+        // private _yellow: number; //590/40nm
+        // private _red:    number; //630/50nm
+        // private _farred: number; //680/52nm
+        // private _nir:    number; //910
+        // private _clear:  number; // unfiltered
+        // private _flicker:number; // unfiltered flicker detection
 
         // constructur
         constructor(address: number){
             this.i2c = address;
+           // this.violet = null;
         }  
+
+        // retrieve private properties
+
+        /** Get violet read */
+        //% blockId="" 
+        //% block="Get violet | %AS7341"
+        //% weight=90 blockGap=8
+        //getViolet():number {
+           // return this.violet();
+        //}
 
         // methods
 
-        /** Initializer */
-        //% blockId="" 
+        /** Initializer 
+         * Check communication with the AS7341
+         * Power up chip
+        */
         //% block="Initialize | %AS7341"
         //% weight=90 blockGap=8
+        //% advanced  = true
         init(): boolean {
             pins.i2cWriteNumber(this.i2c, AS7341_WHOAMI, NumberFormat.UInt8BE,true);
             let chip_id = pins.i2cReadNumber(this.i2c,NumberFormat.UInt8BE,false);
@@ -195,10 +185,10 @@ namespace AS7341 {
             return chip_id >> 2 == AS7341_CHIP_ID; // check bits 2:7, discard 0:1   
         }
 
-        /** Power ON/OFF */
-        //% blockId="" 
+        /** Power ON/OFF */ 
         //% block="Power enable | %AS7341 | %enable_power"
         //% weight=90 blockGap=8
+        //% advanced  = true
         powerEnable(enable_power: boolean): void {
             pins.i2cWriteNumber(this.i2c, AS7341_ENABLE, NumberFormat.UInt8BE, true);
             let enable_reg = pins.i2cReadBuffer(this.i2c, 1, false);
@@ -215,10 +205,24 @@ namespace AS7341 {
             pause(20)
         }
 
+
+        /** Steup measurement */
+        //% block="Set %AS7341 ATIME | %atime  | ASTEP | %astep | and ADC gain | %gain"
+        //% weight=100 blockGap=8
+        //% advanced  = false
+        setMeasurement(atime: number, astep: number, gain: AS7341_GAIN){
+            this.setATIME(atime);
+            this.setASTEP(astep);
+            this.setGain(gain);
+        }
+
+
+
         /** Disable all */
         //% blockId="" 
         //% block="Disable | %AS7341 "
         //% weight=90 blockGap=8
+        //% advanced = true
         disableAll(): void {
             let bfr = Buffer.create(2);
             bfr[0] = AS7341_ENABLE;
@@ -228,9 +232,9 @@ namespace AS7341 {
         }
 
         /** Enable spectral measurement */
-        //% blockId="" 
         //% block="Enable spectral measurement | %AS7341| %spectra_enable"
         //% weight=90 blockGap=8
+        //% advanced = true
         enableSpectral(spectra_enable: boolean): void {
             pins.i2cWriteNumber(this.i2c, AS7341_ENABLE, NumberFormat.UInt8BE, true);
             let enable_reg = pins.i2cReadNumber(this.i2c, NumberFormat.UInt8BE, false);
@@ -249,9 +253,9 @@ namespace AS7341 {
         }
 
         /** Enable SMUX */
-        //% blockId="" 
         //% block="Enable SMUX | %AS7341 | %smux_enable"
         //% weight=90 blockGap=8
+        //% advanced = true
         enableSMUX(smux_enable: boolean): void {
             pins.i2cWriteNumber(this.i2c, AS7341_ENABLE, NumberFormat.UInt8BE, true);
             let enable_reg = pins.i2cReadNumber(this.i2c, NumberFormat.UInt8BE, false);
@@ -270,9 +274,9 @@ namespace AS7341 {
         }
 
         /** Enable flicker detection */
-        //% blockId="" 
         //% block="Enable flicker detection | %AS7341 "
         //% weight=90 blockGap=8
+        //% advanced = true
         enableFlicker(): void {
             pins.i2cWriteNumber(this.i2c, AS7341_ENABLE, NumberFormat.UInt8BE, true);
             let enable_reg = pins.i2cReadNumber(this.i2c, NumberFormat.UInt8BE, false);
@@ -286,6 +290,7 @@ namespace AS7341 {
             pause(20)
         }
 
+        //* Set bank register */
         setBank(val: boolean): void {
             pins.i2cWriteNumber(this.i2c, AS7341_CFG0, NumberFormat.UInt8BE, true);
             let cfg0_reg = pins.i2cReadNumber(this.i2c, NumberFormat.UInt8BE, false);
@@ -303,6 +308,7 @@ namespace AS7341 {
             pause(20)
         }
 
+        /** setup SMUX channels */
         setSMUXLowChannels(f1_f4: boolean) {
             this.enableSpectral(false);
             this.setSMUXCommand(AS7341_SMUX_CMD.AS7341_SMUX_CMD_WRITE);
@@ -314,12 +320,10 @@ namespace AS7341 {
             this.enableSMUX(true);
         }
 
+        /** setup SMUX commands */
         setSMUXCommand(cmd: AS7341_SMUX_CMD) {
             pins.i2cWriteNumber(this.i2c, AS7341_CFG6, NumberFormat.UInt8BE, true);
             let cfg6_reg = pins.i2cReadNumber(this.i2c, NumberFormat.UInt8BE, false);
-
-            // OD01.printNumber(1111)
-            // OD01.printNumber(cfg6_reg)
 
             // reset fourth and fifth bits
             cfg6_reg &= ~0x18;
@@ -331,39 +335,18 @@ namespace AS7341 {
             bfr[1] = cfg6_reg;
             pins.i2cWriteBuffer(this.i2c, bfr, false)
             pause(20)        
-
-            // OD01.printNumber(cfg6_reg)
-            // pins.i2cWriteNumber(this.i2c, AS7341_CFG6, NumberFormat.UInt8BE, true);
-            // cfg6_reg = pins.i2cReadNumber(this.i2c, NumberFormat.UInt8BE, false);
-            // OD01.printNumber(cfg6_reg)
-
-            // pause(10000)
-
         }
 
+        /** write registers */
         writeRegister(byte_address: number, byte_value: number) {
-           // OD01.printString("---")
-          //  OD01.printNumber(byte_address)
-
-           // pins.i2cWriteNumber(this.i2c, byte_address, NumberFormat.UInt8BE, false);
-            //let val = pins.i2cReadNumber(this.i2c, NumberFormat.UInt8BE, false);
-           // OD01.printNumber(val)
-
             let bfr = Buffer.create(2);
             bfr[0] = byte_address;
             bfr[1] = byte_value;
             pins.i2cWriteBuffer(this.i2c,bfr,false)
-           // pins.i2cWriteNumber(this.i2c, byte_address, NumberFormat.UInt8BE, false);
-           // pins.i2cWriteNumber(this.i2c, byte_value, NumberFormat.UInt8BE, false);
-           // pause(5000)
-
-            //pins.i2cWriteNumber(this.i2c, byte_address, NumberFormat.UInt8BE, false);
-            //val = pins.i2cReadNumber(this.i2c, NumberFormat.UInt8BE, false);
-            //OD01.printNumber(val)
         }
-
+ 
+        /** SMUX Config for F1,F2,F3,F4,NIR,Clear */
         setup_F1F4_Clear_NIR() {
-            // SMUX Config for F1,F2,F3,F4,NIR,Clear
             this.writeRegister(0x00, 0x30); // F3 left set to ADC2
             this.writeRegister(0x01, 0x01); // F1 left set to ADC0
             this.writeRegister(0x02, 0x00); // Reserved or disabled
@@ -384,10 +367,10 @@ namespace AS7341 {
             this.writeRegister(0x11, 0x50); // CLEAR right connected to AD4
             this.writeRegister(0x12, 0x00); // Reserved or disabled
             this.writeRegister(0x13, 0x06); // NIR connected to ADC5
-            }
+        }
 
+        /** SMUX Config for F5,F6,F7,F8,NIR,Clear */
         setup_F5F8_Clear_NIR() {
-            // SMUX Config for F5,F6,F7,F8,NIR,Clear
             this.writeRegister(0x00, 0x00); // F3 left disable
             this.writeRegister(0x01, 0x00); // F1 left disable
             this.writeRegister(0x02, 0x00); // reserved/disable
@@ -411,15 +394,12 @@ namespace AS7341 {
             
         }
 
-
-
-
-
-    // PORTED BUT DOES NOT SEEM TO WORK!!!!
+        // PORTED BUT DOES NOT SEEM TO WORK!!!!
+        // @ae more work needed
         /** Set LED ON/OFF */
-        //% blockId="" 
         //% block="Set LED of | %AS7341 | to | %val "
         //% weight=90 blockGap=8
+        //% advanced = true
         setLED(val: boolean): void {
             // configure AS7341 to control LED state
             pins.i2cWriteNumber(this.i2c, AS7341_CONFIG, NumberFormat.UInt8BE, true);
@@ -451,9 +431,9 @@ namespace AS7341 {
         /** Sets the integration time step count
          *  Total integration time will be `(ATIME + 1) * (ASTEP + 1) * 2.78µS
          */
-        //% blockId="" 
         //% block="Set ATIME of | %AS7341 | to | %val "
         //% weight=90 blockGap=8
+        //% advanced = true
         setATIME(val: number){
             let bfr = Buffer.create(2);
             bfr[0] = AS7341_ATIME;
@@ -464,10 +444,10 @@ namespace AS7341 {
 
         /** Gets the integration time step count
          *  Total integration time will be `(ATIME + 1) * (ASTEP + 1) * 2.78µS
-         */
-        //% blockId="" 
+         */ 
         //% block="Get ATIME of | %AS7341 "
         //% weight=90 blockGap=8
+        //% advanced = true
         getATIME():number {
             pins.i2cWriteNumber(this.i2c, AS7341_ATIME, NumberFormat.UInt8BE, true);
             let val=pins.i2cReadNumber(this.i2c, NumberFormat.UInt8BE, false);
@@ -477,9 +457,9 @@ namespace AS7341 {
         /**Sets the integration time step size
         *  Total integration time will be `(ATIME + 1) * (ASTEP + 1) * 2.78µS
         */
-        //% blockId="" 
         //% block="Set ASTEP of | %AS7341 | to | %val "
         //% weight=90 blockGap=8
+        //% advanced = true
         setASTEP(val: number) {
             let bfr = Buffer.create(3);
             bfr[0] = AS7341_ASTEP_L; // set 2x bytes to also fill ASTEP_H
@@ -495,9 +475,9 @@ namespace AS7341 {
         /** Gets the integration time step size
          *  Total integration time will be `(ATIME + 1) * (ASTEP + 1) * 2.78µS
          */
-        //% blockId="" 
         //% block="Get ASTEP of | %AS7341 "
         //% weight=90 blockGap=8
+        //% advanced = true
         getASTEP(): number {
             pins.i2cWriteNumber(this.i2c, AS7341_ASTEP_L, NumberFormat.UInt8BE, true);
             let bfr = pins.i2cReadBuffer(this.i2c, 2, false);
@@ -505,9 +485,9 @@ namespace AS7341 {
         }
 
         /** Sets ADC Gain */
-        //% blockId="" 
         //% block="Set ADC Gain of | %AS7341 | to | %val "
         //% weight=90 blockGap=8
+        //% advanced = true
         setGain(val: AS7341_GAIN) {
             //pins.i2cWriteNumber(this.i2c, AS7341_CFG1, NumberFormat.UInt8BE, true);
             //let cfg1_reg = pins.i2cReadNumber(this.i2c, NumberFormat.UInt8BE, false);
@@ -519,9 +499,9 @@ namespace AS7341 {
         }
  
         /** Gets ADC Gain */
-        //% blockId="" 
         //% block="Get ADC Gain of | %AS7341 "
         //% weight=90 blockGap=8
+        //% advanced = true
         getGain(): AS7341_GAIN {
             pins.i2cWriteNumber(this.i2c, AS7341_CFG1, NumberFormat.UInt8BE, true);
             let val = pins.i2cReadNumber(this.i2c, NumberFormat.UInt8BE, false);
@@ -529,9 +509,9 @@ namespace AS7341 {
         }
 
         /** Check if sensor completed measurement */
-        //% blockId="" 
         //% block="Is data read? | %AS7341 "
         //% weight=90 blockGap=8
+        //% advanced = true
         getIsDataReady(): boolean {
             pins.i2cWriteNumber(this.i2c, AS7341_STATUS2, NumberFormat.UInt8BE, true);
             let status2_reg = pins.i2cReadNumber(this.i2c, NumberFormat.UInt8BE, false);
@@ -539,7 +519,6 @@ namespace AS7341 {
         }
 
         /** Read all channels */
-        //% blockId="" 
         //% block="Read | %AS7341"
         //% weight=90 blockGap=8
         read() {
@@ -597,120 +576,16 @@ namespace AS7341 {
         }
 
 
-
-
-
-
     };
 
-
-
-
-
-
-
-
-
-
-    //  export class AS7341 {
-    //      // properties
-    //     i2c: number;
-
-    //     // constructur
-    //     constructor(address: number){
-    //         this.i2c = address;
-    //     }  
-
-    //      /** set integration time (ATIME + 1) * (ASTEP + 1) * 2.78µs */
-    //      //% blockId="" 
-    //      //% block="Set ATIME of sensor | %AS7341 | to | %atime_val"
-    //      //% weight=90 blockGap=8
-    //      setATIME(atime_val: number) {
-    //          pins.i2cWriteNumber(this.i2c, 0x81, NumberFormat.UInt16BE, true);
-    //          pins.i2cWriteNumber(this.i2c, atime_val, NumberFormat.UInt8BE, false)
-    //      }
-    //      /** Get integration time (ATIME + 1) * (ASTEP + 1) * 2.78µs */
-    //      //% blockId="" 
-    //      //% block="Get ATIME of sensor | %AS7341"
-    //      //% weight=90 blockGap=8
-    //      getATIME(): number {
-    //          pins.i2cWriteNumber(this.i2c, 0x81, NumberFormat.UInt16BE, true);
-    //          return pins.i2cReadNumber(this.i2c,  NumberFormat.UInt8BE, false)
-    //      }
-
-    //      /** set ASTEP integration value (ATIME + 1) * (ASTEP + 1) * 2.78µs */
-    //      //% blockId="" 
-    //      //% block="Set ASTEP of sensor | %AS7341 | to | %astep_val"
-    //      //% weight=90 blockGap=8
-    //      setASTEP(astep_val: number) {
-    //          pins.i2cWriteNumber(this.i2c, 0x81, NumberFormat.UInt16BE, true);
-    //          pins.i2cWriteNumber(this.i2c, astep_val, NumberFormat.UInt16BE, false)
-    //      }
-
-    //      /** Get ADC gain multiplier */
-    //      //% blockId="" 
-    //      //% block="Get ATIME of sensor | %AS7341"
-    //      //% weight=90 blockGap=8
-    //      getGain(): number {
-    //          pins.i2cWriteNumber(this.i2c, 0xAA, NumberFormat.UInt8BE, true);
-    //          return pins.i2cReadNumber(this.i2c, NumberFormat.UInt8BE, false)
-    //      }
-
-
-    //     //  /**
-    //     //   * @brief Returns the ADC gain multiplier
-    //     //   *
-    //     //   * @return as7341_gain_t The current ADC gain multiplier
-    //     //   */
-    //     //  as7341_gain_t Adafruit_AS7341:: getGain() {
-    //     //      Adafruit_BusIO_Register cfg1_reg =
-    //     //          Adafruit_BusIO_Register(i2c_dev, AS7341_CFG1);
-    //     //      return (as7341_gain_t)cfg1_reg.read();
-    //     //  }
-
-
-    //     /** who am I? */
-    //     //% blockId="" 
-    //     //% block="Read chipset | %AS7341"
-    //     //% weight=90 blockGap=8
-    //     getId(){
-    //         pins.i2cWriteNumber(this.i2c, 0x92, NumberFormat.UInt8BE, true);
-    //         return pins.i2cReadNumber(this.i2c, NumberFormat.UInt8BE,false);
-    //     }
-
-
-    //     //  bool Adafruit_AS7341:: setATIME(uint8_t atime_value) {
-    //     //      Adafruit_BusIO_Register atime_reg =
-    //     //          Adafruit_BusIO_Register(i2c_dev, AS7341_ATIME);
-    //     //      return atime_reg.write(atime_value);
-    //     //  }
-
-
-
-
-
-
-
-
-    //      /** Read sensor value  */
-    //     //% blockId="ob_read_sensor" 
-    //     //% block="Read sensor | %Sensor"
-    //     //% weight=90 blockGap=8
-    //     getValue(){return 0};
-
-    //  };
-
-    // coding this one...@ae
-    // CREATE OPTOFARM INSTANCE (custom sensor)
-    //% blockId="" 
-    //% block="Set AS7341 sensor  at I2C | %address | address"
-    //% weight=100 blockGap=8
-    //% blockSetVariable=OptoFarm
-    //% inlineInputMode=inline
-    export function NewAS7341(address: number) {
-        let SensorId = new AS7341(address)
+    /** Create a new instance of AS7341 */
+    //% block="New spectral sensor || at I2C | %address"
+    //% weight=1000 blockGap=8
+    export function New_AS7341(address?: number): AS7341 {
+        if (~address){ address=AS7341_I2CADDR_DEFAULT};
+        let SensorId = new AS7341(address);
+        SensorId.init();
         return SensorId;
     };
 
-
-}
+};
