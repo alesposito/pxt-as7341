@@ -1,6 +1,11 @@
 /** micro:bit extension to integrate the AS7341 spectral detector in MakeCode projects
  *  the library is a partial port of https://github.com/adafruit/Adafruit_AS7341
  *  not all functions are still implemented
+ * 
+ * by Alessandro Esposito (2022)
+ * University of Cambrudge
+ * Brunel University London
+ * King's College London
  */
 
 // register definitions
@@ -121,6 +126,25 @@ enum AS7341_SPECTRAL_CH {
     AS7341_CHANNEL_NIR,
 };
 
+/** Channel Colours */
+/** SMUX Config for F1,F2,F3,F4,NIR,Clear */
+/** SMUX Config for F5,F6,F7,F8,NIR,Clear */
+
+enum AS7341_CH_COLOURS {
+    violet = 0,  // buffer F1
+    indigo = 2,  // buffer F2
+    blue   = 4,  // buffer F3
+    cyan   = 6,  // buffer F4
+    green  = 12, // buffer F5
+    yellow = 14, // buffer F6
+    red    = 16, // buffer F7
+    farred = 18, // buffer F8
+    nir    = 20, // buffer NIR
+    clear  = 22  // buffer clear
+    //flicker
+};
+
+
 // enum INT_COUNT not ported
 // enum GPIO not ported
 // enum Asynch not ported
@@ -138,24 +162,12 @@ namespace AS7341 {
     export class AS7341 {
         // properties
         i2c: number;
+        adc: Buffer;
         
-        // private properties (previous spectral reads)
-        //violet: number; //415/26nm
-        // private _indigo: number; //445/30nm
-        // private _blue:   number; //480/36nm
-        // private _cyan:   number; //515/39nm
-        // private _green:  number; //555/39nm
-        // private _yellow: number; //590/40nm
-        // private _red:    number; //630/50nm
-        // private _farred: number; //680/52nm
-        // private _nir:    number; //910
-        // private _clear:  number; // unfiltered
-        // private _flicker:number; // unfiltered flicker detection
-
         // constructur
-        constructor(address: number){
+        constructor(address: number, adc?: Buffer){
             this.i2c = address;
-           // this.violet = null;
+            if (adc) {this.adc = adc;}
         }  
 
         // retrieve private properties
@@ -209,7 +221,6 @@ namespace AS7341 {
         /** Steup measurement */
         //% block="Set %AS7341 ATIME | %atime  | ASTEP | %astep | and ADC gain | %gain"
         //% weight=100 blockGap=8
-        //% advanced  = false
         setMeasurement(atime: number, astep: number, gain: AS7341_GAIN){
             this.setATIME(atime);
             this.setASTEP(astep);
@@ -518,68 +529,85 @@ namespace AS7341 {
             return (status2_reg & 0x40)==64 // check 7th bit for AVALID
         }
 
+        /** Wait for data ready */
+        //% block="Wait for data | %AS7341 || %timeout (steps in 100ms each)"
+        //% weight=90 blockGap=8
+        WaitForData(timeout?: number): boolean {
+            let c = 0;      // check timeout
+            let cmax = 20;  // 2 seconds timeout
+            if (~timeout) {
+                cmax = timeout;
+            }
+            while (true) {
+                if (this.getIsDataReady() || c == cmax) { break }
+                pause(100)
+                c += 1;
+            }
+            if (c == cmax) {
+                return false
+            } else {
+                return true
+            }
+        }
+
         /** Read all channels */
         //% block="Read | %AS7341"
         //% weight=90 blockGap=8
         read() {
-            this.setSMUXLowChannels(true);        // Configure SMUX to read low channels
-            this.enableSpectral(true); // Start Measurement
+            // Configure SMUX to read low channels
+            this.setSMUXLowChannels(true);             
+            this.enableSpectral(true); 
+            this.WaitForData();
 
-            let c=0; // set timeout
-            while (true) {
-                c+=1;
-                pause(20)
-                if (this.getIsDataReady() || c>100) {
-                    break;
-                }
-            }
+            // Read ADC
             pins.i2cWriteNumber(this.i2c, AS7341_CH0_DATA_L,NumberFormat.UInt8BE, true);
-            let bfr = pins.i2cReadBuffer(this.i2c, 12, false); // read 12 bytes
-            let ch0 = bfr.getNumber(NumberFormat.UInt16LE, 0);
-            let ch1 = bfr.getNumber(NumberFormat.UInt16LE, 2);
-            let ch2 = bfr.getNumber(NumberFormat.UInt16LE, 4);
-            let ch3 = bfr.getNumber(NumberFormat.UInt16LE, 6);
-            let ch4 = bfr.getNumber(NumberFormat.UInt16LE, 8);
-            let ch5 = bfr.getNumber(NumberFormat.UInt16LE, 10);
-            OD01.showNumber(ch0, 0, 0)
-            OD01.showNumber(ch1, 0, 1)
-            OD01.showNumber(ch2, 0, 2)
-            OD01.showNumber(ch3, 0, 3)
-            OD01.showNumber(ch4, 0, 4)
-            OD01.showNumber(ch5, 0, 5)
+            let bfr_L = pins.i2cReadBuffer(this.i2c, 12, false); // read 12 bytes
+            // let ch0 = bfr_L.getNumber(NumberFormat.UInt16LE, 0);
+            // let ch1 = bfr_L.getNumber(NumberFormat.UInt16LE, 2);
+            // let ch2 = bfr_L.getNumber(NumberFormat.UInt16LE, 4);
+            // let ch3 = bfr_L.getNumber(NumberFormat.UInt16LE, 6);
+            // let ch4 = bfr_L.getNumber(NumberFormat.UInt16LE, 8);
+            // let ch5 = bfr_L.getNumber(NumberFormat.UInt16LE, 10);
+            // OD01.showNumber(ch0, 0, 0)
+            // OD01.showNumber(ch1, 0, 1)
+            // OD01.showNumber(ch2, 0, 2)
+            // OD01.showNumber(ch3, 0, 3)
+            // OD01.showNumber(ch4, 0, 4)
+            // OD01.showNumber(ch5, 0, 5)
 
-            this.setSMUXLowChannels(false);       // Configure SMUX to read high channels
-            this.enableSpectral(true); // Start integration
-            c = 0; // set timeout
-            while (true) {
-                c += 1;
-                pause(20)
-                if (this.getIsDataReady() || c > 100) {
-                    break;
-                }
-            }
+            // Configure SMUX to read high channels
+            this.setSMUXLowChannels(false);       
+            this.enableSpectral(true);
+            this.WaitForData();
+
             pins.i2cWriteNumber(this.i2c, AS7341_CH0_DATA_L, NumberFormat.UInt8BE, true);
-            let bfrb = pins.i2cReadBuffer(this.i2c, 12, false); // read 12 bytes
-            let ch0b = bfrb.getNumber(NumberFormat.UInt16LE, 0);
-            let ch1b = bfrb.getNumber(NumberFormat.UInt16LE, 2);
-            let ch2b = bfrb.getNumber(NumberFormat.UInt16LE, 4);
-            let ch3b = bfrb.getNumber(NumberFormat.UInt16LE, 6);
-            let ch4b = bfrb.getNumber(NumberFormat.UInt16LE, 8);
-            let ch5b = bfrb.getNumber(NumberFormat.UInt16LE, 10);
-            OD01.showNumber(ch0b, 50, 0)
-            OD01.showNumber(ch1b, 50, 1)
-            OD01.showNumber(ch2b, 50, 2)
-            OD01.showNumber(ch3b, 50, 3)
-            OD01.showNumber(ch4b, 50, 4)
-            OD01.showNumber(ch5b, 50, 5)
+            let bfr_H = pins.i2cReadBuffer(this.i2c, 12, false); // read 12 bytes
+            // let ch0b = bfr_H.getNumber(NumberFormat.UInt16LE, 0);
+            // let ch1b = bfr_H.getNumber(NumberFormat.UInt16LE, 2);
+            // let ch2b = bfr_H.getNumber(NumberFormat.UInt16LE, 4);
+            // let ch3b = bfr_H.getNumber(NumberFormat.UInt16LE, 6);
+            // let ch4b = bfr_H.getNumber(NumberFormat.UInt16LE, 8);
+            // let ch5b = bfr_H.getNumber(NumberFormat.UInt16LE, 10);
+            // OD01.showNumber(ch0b, 50, 0)
+            // OD01.showNumber(ch1b, 50, 1)
+            // OD01.showNumber(ch2b, 50, 2)
+            // OD01.showNumber(ch3b, 50, 3)
+            // OD01.showNumber(ch4b, 50, 4)
+            // OD01.showNumber(ch5b, 50, 5)
 
+            this.adc = bfr_L.concat(bfr_H); 
         }
 
-
+        /** Read all channels */
+        //% block="Read | %AS7341 | %col"
+        //% weight=90 blockGap=8
+        getADC(col: AS7341_CH_COLOURS): number {
+            return this.adc.getNumber(NumberFormat.UInt16LE, col)
+        }
     };
 
     /** Create a new instance of AS7341 */
-    //% block="New spectral sensor || at I2C | %address"
+    //% block="New spectral sensor || at I2C | %address |"
     //% weight=1000 blockGap=8
     export function New_AS7341(address?: number): AS7341 {
         if (~address){ address=AS7341_I2CADDR_DEFAULT};
